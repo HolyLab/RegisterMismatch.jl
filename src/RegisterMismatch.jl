@@ -1,12 +1,13 @@
-__precompile__()
-
 module RegisterMismatch
 
 import Base: copy, eltype, isnan, ndims
 
 using Images
-using RFFT
+using RFFT, FFTW
 using RegisterCore
+using Printf
+using RegisterMismatchCommon
+import RegisterMismatchCommon: mismatch, mismatch_apertures
 
 export
     CMStorage,
@@ -15,8 +16,6 @@ export
     mismatch!,
     mismatch_apertures,
     mismatch_apertures!
-
-include("RegisterMismatchCommon.jl")
 
 """
 The major types and functions exported are:
@@ -34,10 +33,10 @@ The major types and functions exported are:
 """
 RegisterMismatch
 
-FFTW.set_num_threads(min(Sys.CPU_CORES, 8))
-const FFTPROD = [2,3]
+FFTW.set_num_threads(min(Sys.CPU_THREADS, 8))
+set_FFTPROD([2,3])
 
-type NanCorrFFTs{T<:AbstractFloat,N}
+mutable struct NanCorrFFTs{T<:AbstractFloat,N}
     I0::RCpair{T,N}
     I1::RCpair{T,N}
     I2::RCpair{T,N}
@@ -52,10 +51,10 @@ computations over domains of size `aperture_width`, computing the
 mismatch up to shifts of size `maxshift`.  The keyword arguments allow
 you to control the planning process for the FFTs.
 """
-type CMStorage{T<:AbstractFloat,N}
+mutable struct CMStorage{T<:AbstractFloat,N}
     aperture_width::Vector{Float64}
     maxshift::Vector{Int}
-    getindexes::Vector{UnitRange{Int}}   # indexes for pulling padded data, in source-coordinates
+    getindices::Vector{UnitRange{Int}}   # indices for pulling padded data, in source-coordinates
     padded::Array{T,N}
     fixed::NanCorrFFTs{T,N}
     moving::NanCorrFFTs{T,N}
@@ -64,17 +63,17 @@ type CMStorage{T<:AbstractFloat,N}
     # the next two store the result of calling plan_fft! and plan_ifft!
     fftfunc!::Function
     ifftfunc!::Function
-    shiftindexes::Vector{Vector{Int}} # indexes for performing fftshift & snipping from -maxshift:maxshift
+    shiftindices::Vector{Vector{Int}} # indices for performing fftshift & snipping from -maxshift:maxshift
 
-    function (::Type{CMStorage{T,N}}){T,N}(::Type{T}, aperture_width::WidthLike, maxshift::DimsLike; flags=FFTW.ESTIMATE, timelimit=Inf, display=true)
+    function CMStorage{T,N}(::Type{T}, aperture_width::WidthLike, maxshift::DimsLike; flags=FFTW.ESTIMATE, timelimit=Inf, display=true) where {T,N}
         blocksize = map(x->ceil(Int,x), aperture_width)
         length(blocksize) == length(maxshift) || error("Dimensionality mismatch")
         padsz = padsize(blocksize, maxshift)
         padszt = tuple(padsz...)
-        padded = Array{T}(padszt)
-        getindexes = padranges(blocksize, maxshift)
+        padded = Array{T}(undef, padszt)
+        getindices = padranges(blocksize, maxshift)
         maxshiftv = [maxshift...]
-        region = find(maxshiftv .> 0)
+        region = findall(maxshiftv .> 0)
         fixed  = NanCorrFFTs(RCpair(T, padszt, region), RCpair(T, padszt, region), RCpair(T, padszt, region))
         moving = NanCorrFFTs(RCpair(T, padszt, region), RCpair(T, padszt, region), RCpair(T, padszt, region))
         buf1 = RCpair(T, padszt, region)
@@ -82,7 +81,7 @@ type CMStorage{T<:AbstractFloat,N}
         tcalib = 0
         if display && flags != FFTW.ESTIMATE
             print("Planning FFTs (maximum $timelimit seconds)...")
-            flush(STDOUT)
+            flush(stdout)
             tcalib = time()
         end
         fftfunc = plan_rfft!(fixed.I0, flags=flags, timelimit=timelimit/2)
@@ -91,14 +90,14 @@ type CMStorage{T<:AbstractFloat,N}
             dt = time()-tcalib
             @printf("done (%.2f seconds)\n", dt)
         end
-        shiftindexes = Vector{Int}[ [size(padded,i)+(-maxshift[i]+1:0); 1:maxshift[i]+1] for i = 1:length(maxshift) ]
-        new{T,N}(Float64[aperture_width...], maxshiftv, getindexes, padded, fixed, moving, buf1, buf2, fftfunc, ifftfunc, shiftindexes)
+        shiftindices = Vector{Int}[ [size(padded,i).+(-maxshift[i]+1:0); 1:maxshift[i]+1] for i = 1:length(maxshift) ]
+        new{T,N}(Float64[aperture_width...], maxshiftv, getindices, padded, fixed, moving, buf1, buf2, fftfunc, ifftfunc, shiftindices)
     end
 end
-CMStorage{T<:Real}(::Type{T}, aperture_width, maxshift; kwargs...) = CMStorage{T,length(aperture_width)}(T, aperture_width, maxshift; kwargs...)
+CMStorage(::Type{T}, aperture_width, maxshift; kwargs...) where {T<:Real} = CMStorage{T,length(aperture_width)}(T, aperture_width, maxshift; kwargs...)
 
-eltype{T,N}(cms::CMStorage{T,N}) = T
- ndims{T,N}(cms::CMStorage{T,N}) = N
+eltype(cms::CMStorage{T,N}) where {T,N} = T
+ ndims(cms::CMStorage{T,N}) where {T,N} = N
 
 """
 `mm = mismatch([T], fixed, moving, maxshift;
@@ -111,7 +110,7 @@ normalization scheme (`:intensity` or `:pixels`).
 `fixed` and `moving` must have the same size; you can pad with
 `NaN`s as needed. See `nanpad`.
 """
-function mismatch{T<:Real}(::Type{T}, fixed::AbstractArray, moving::AbstractArray, maxshift::DimsLike; normalization = :intensity)
+function mismatch(::Type{T}, fixed::AbstractArray, moving::AbstractArray, maxshift::DimsLike; normalization = :intensity) where T<:Real
     assertsamesize(fixed, moving)
     maxshiftv = tovec(maxshift)
     msz = 2maxshiftv.+1
@@ -133,7 +132,7 @@ function mismatch!(mm::MismatchArray, cms::CMStorage, moving::AbstractArray; nor
     # within the boundaries of the SubArray. Use NaN only for pixels
     # truly lacking data.
     checksize_maxshift(mm, cms.maxshift)
-    safe_get!(cms.padded, moving, tuple(cms.getindexes...), convert(eltype(cms), NaN))
+    safe_get!(cms.padded, moving, tuple(cms.getindices...), convert(eltype(cms), NaN))
     fftnan!(cms.moving, cms.padded, cms.fftfunc!)
     # Compute the mismatch
     f0 = complex(cms.fixed.I0)
@@ -161,7 +160,7 @@ function mismatch!(mm::MismatchArray, cms::CMStorage, moving::AbstractArray; nor
     end
     cms.ifftfunc!(cms.buf1)
     cms.ifftfunc!(cms.buf2)
-    copy!(mm, (view(real(cms.buf1), cms.shiftindexes...), view(real(cms.buf2), cms.shiftindexes...)))
+    copyto!(mm, (view(real(cms.buf1), cms.shiftindices...), view(real(cms.buf2), cms.shiftindices...)))
     mm
 end
 
@@ -190,15 +189,15 @@ in a rectangular grid, you can use an `N`-dimensional array-of-tuples
 (or array-of-vectors) or an `N+1`-dimensional array with the center
 positions specified along the first dimension. See `aperture_grid`.
 """
-function mismatch_apertures{T}(::Type{T},
-                               fixed::AbstractArray,
-                               moving::AbstractArray,
-                               aperture_centers::AbstractArray,
-                               aperture_width::WidthLike,
-                               maxshift::DimsLike;
-                               normalization = :pixels,
-                               flags = FFTW.MEASURE,
-                               kwargs...)
+function mismatch_apertures(::Type{T},
+                            fixed::AbstractArray,
+                            moving::AbstractArray,
+                            aperture_centers::AbstractArray,
+                            aperture_width::WidthLike,
+                            maxshift::DimsLike;
+                            normalization = :pixels,
+                            flags = FFTW.MEASURE,
+                            kwargs...) where T
     nd = sdims(fixed)
     assertsamesize(fixed,moving)
     (length(aperture_width) == nd && length(maxshift) == nd) || error("Dimensionality mismatch")
@@ -233,7 +232,7 @@ function mismatch_apertures!(mms, fixed, moving, aperture_centers, cms; normaliz
 end
 
 # Calculate the components needed to "nancorrelate"
-function fftnan!{T<:Real}(out::NanCorrFFTs{T}, A::AbstractArray{T}, fftfunc!::Function)
+function fftnan!(out::NanCorrFFTs{T}, A::AbstractArray{T}, fftfunc!::Function) where T<:Real
     I0 = real(out.I0)
     I1 = real(out.I1)
     I2 = real(out.I2)
@@ -245,8 +244,8 @@ function fftnan!{T<:Real}(out::NanCorrFFTs{T}, A::AbstractArray{T}, fftfunc!::Fu
     out
 end
 
-function _fftnan!{T<:Real}(I0, I1, I2, A::AbstractArray{T})
-    @inbounds for i in CartesianRange(size(A))
+function _fftnan!(I0, I1, I2, A::AbstractArray{T}) where T<:Real
+    @inbounds for i in CartesianIndices(size(A))
         a = A[i]
         f = !isnan(a)
         I0[i] = f
@@ -256,23 +255,23 @@ function _fftnan!{T<:Real}(I0, I1, I2, A::AbstractArray{T})
     end
 end
 
-function fillfixed!{T}(cms::CMStorage{T}, fixed::AbstractArray)
+function fillfixed!(cms::CMStorage{T}, fixed::AbstractArray) where T
     fill!(cms.padded, NaN)
-    X = view(cms.padded, ntuple(d->(1:size(fixed,d))+cms.maxshift[d], ndims(fixed))...)
-    copy!(X, fixed)
+    X = view(cms.padded, ntuple(d->(1:size(fixed,d)).+cms.maxshift[d], ndims(fixed))...)
+    copyto!(X, fixed)
     fftnan!(cms.fixed, cms.padded, cms.fftfunc!)
 end
 
-function fillfixed!{T}(cms::CMStorage{T}, fixed::SubArray)
+function fillfixed!(cms::CMStorage{T}, fixed::SubArray) where T
     fill!(cms.padded, NaN)
-    X = view(cms.padded, ntuple(d->(1:size(fixed,d))+cms.maxshift[d], ndims(fixed))...)
-    get!(X, parent(fixed), parentindexes(fixed), convert(T, NaN))
+    X = view(cms.padded, ntuple(d->(1:size(fixed,d)).+cms.maxshift[d], ndims(fixed))...)
+    get!(X, parent(fixed), parentindices(fixed), convert(T, NaN))
     fftnan!(cms.fixed, cms.padded, cms.fftfunc!)
 end
 
 #### Utilities
 
-Base.isnan{T}(A::Array{Complex{T}}) = isnan(real(A)) | isnan(imag(A))
+Base.isnan(A::Array{Complex{T}}) where {T} = isnan(real(A)) | isnan(imag(A))
 function sumsq_finite(A)
     s = 0.0
     for a in A
