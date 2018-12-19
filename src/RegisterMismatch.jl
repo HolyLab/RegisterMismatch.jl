@@ -7,11 +7,12 @@ using RFFT, FFTW
 using RegisterCore
 using Printf
 using RegisterMismatchCommon
-import RegisterMismatchCommon: mismatch, mismatch_apertures
+import RegisterMismatchCommon: mismatch0, mismatch, mismatch_apertures
 
 export
     CMStorage,
     fillfixed!,
+    mismatch0,
     mismatch,
     mismatch!,
     mismatch_apertures,
