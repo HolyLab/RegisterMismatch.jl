@@ -37,10 +37,10 @@ RegisterMismatch
 FFTW.set_num_threads(min(Sys.CPU_THREADS, 8))
 set_FFTPROD([2,3])
 
-mutable struct NanCorrFFTs{T<:AbstractFloat,N,S}
-    I0::RCpair{T,N,S}
-    I1::RCpair{T,N,S}
-    I2::RCpair{T,N,S}
+mutable struct NanCorrFFTs{T<:AbstractFloat,N,RCType<:RCpair{T,N}}
+    I0::RCType
+    I1::RCType
+    I2::RCType
 end
 
 copy(x::NanCorrFFTs) = NanCorrFFTs(copy(x.I0), copy(x.I1), copy(x.I2))
@@ -52,18 +52,18 @@ Prepare for FFT-based mismatch computations over domains of size `aperture_width
 mismatch up to shifts of size `maxshift`.  The keyword arguments allow you to control the planning
 process for the FFTs.
 """
-mutable struct CMStorage{T<:AbstractFloat,N,S}
+mutable struct CMStorage{T<:AbstractFloat,N,RCType<:RCpair{T,N},FFT<:Function,IFFT<:Function}
     aperture_width::Vector{Float64}
     maxshift::Vector{Int}
     getindices::Vector{UnitRange{Int}}   # indices for pulling padded data, in source-coordinates
     padded::Array{T,N}
-    fixed::NanCorrFFTs{T,N,S}
-    moving::NanCorrFFTs{T,N,S}
-    buf1::RCpair{T,N,S}
-    buf2::RCpair{T,N,S}
+    fixed::NanCorrFFTs{T,N,RCType}
+    moving::NanCorrFFTs{T,N,RCType}
+    buf1::RCType
+    buf2::RCType
     # the next two store the result of calling plan_fft! and plan_ifft!
-    fftfunc!::Function
-    ifftfunc!::Function
+    fftfunc!::FFT
+    ifftfunc!::IFFT
     shiftindices::Vector{Vector{Int}} # indices for performing fftshift & snipping from -maxshift:maxshift
 end
 
@@ -91,7 +91,7 @@ function CMStorage{T,N}(::UndefInitializer, aperture_width::NTuple{N,<:Real}, ma
         @printf("done (%.2f seconds)\n", dt)
     end
     shiftindices = Vector{Int}[ [size(padded,i).+(-maxshift[i]+1:0); 1:maxshift[i]+1] for i = 1:length(maxshift) ]
-    CMStorage{T,N,typeof(real(buf1))}(Float64[aperture_width...], maxshiftv, getindices, padded, fixed, moving, buf1, buf2, fftfunc, ifftfunc, shiftindices)
+    CMStorage{T,N,typeof(buf1),typeof(fftfunc),typeof(ifftfunc)}(Float64[aperture_width...], maxshiftv, getindices, padded, fixed, moving, buf1, buf2, fftfunc, ifftfunc, shiftindices)
 end
 
 CMStorage{T}(::UndefInitializer, aperture_width::NTuple{N,<:Real}, maxshift::Dims{N}; kwargs...) where {T<:Real,N} =
@@ -223,7 +223,7 @@ function mismatch_apertures!(mms, fixed, moving, aperture_centers, cms; normaliz
         rng = aperture_range(center, cms.aperture_width)
         # sub throws an error in 0.4 when rng extends outside of
         #    bounds, see julia #10296.
-	fsnip = Base.unsafe_view(fixed, rng...)
+        fsnip = Base.unsafe_view(fixed, rng...)
         msnip = Base.unsafe_view(moving, rng...)
         # Perform the calculation
         fillfixed!(cms, fsnip)
