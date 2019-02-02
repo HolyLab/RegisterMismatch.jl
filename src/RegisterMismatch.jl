@@ -37,72 +37,73 @@ RegisterMismatch
 FFTW.set_num_threads(min(Sys.CPU_THREADS, 8))
 set_FFTPROD([2,3])
 
-mutable struct NanCorrFFTs{T<:AbstractFloat,N}
-    I0::RCpair{T,N}
-    I1::RCpair{T,N}
-    I2::RCpair{T,N}
+mutable struct NanCorrFFTs{T<:AbstractFloat,N,S}
+    I0::RCpair{T,N,S}
+    I1::RCpair{T,N,S}
+    I2::RCpair{T,N,S}
 end
 
 copy(x::NanCorrFFTs) = NanCorrFFTs(copy(x.I0), copy(x.I1), copy(x.I2))
 
 """
-`CMStorage(T, aperture_width, maxshift; [flags=FFTW.ESTIMATE],
-[timelimit=Inf], [display=true])` prepares for FFT-based mismatch
-computations over domains of size `aperture_width`, computing the
-mismatch up to shifts of size `maxshift`.  The keyword arguments allow
-you to control the planning process for the FFTs.
+    CMStorage{T}(undef, aperture_width, maxshift; flags=FFTW.ESTIMATE, timelimit=Inf, display=true)
+
+Prepare for FFT-based mismatch computations over domains of size `aperture_width`, computing the
+mismatch up to shifts of size `maxshift`.  The keyword arguments allow you to control the planning
+process for the FFTs.
 """
-mutable struct CMStorage{T<:AbstractFloat,N}
+mutable struct CMStorage{T<:AbstractFloat,N,S}
     aperture_width::Vector{Float64}
     maxshift::Vector{Int}
     getindices::Vector{UnitRange{Int}}   # indices for pulling padded data, in source-coordinates
     padded::Array{T,N}
-    fixed::NanCorrFFTs{T,N}
-    moving::NanCorrFFTs{T,N}
-    buf1::RCpair{T,N}
-    buf2::RCpair{T,N}
+    fixed::NanCorrFFTs{T,N,S}
+    moving::NanCorrFFTs{T,N,S}
+    buf1::RCpair{T,N,S}
+    buf2::RCpair{T,N,S}
     # the next two store the result of calling plan_fft! and plan_ifft!
     fftfunc!::Function
     ifftfunc!::Function
     shiftindices::Vector{Vector{Int}} # indices for performing fftshift & snipping from -maxshift:maxshift
-
-    function CMStorage{T,N}(::Type{T}, aperture_width::WidthLike, maxshift::DimsLike; flags=FFTW.ESTIMATE, timelimit=Inf, display=true) where {T,N}
-        blocksize = map(x->ceil(Int,x), aperture_width)
-        length(blocksize) == length(maxshift) || error("Dimensionality mismatch")
-        padsz = padsize(blocksize, maxshift)
-        padszt = tuple(padsz...)
-        padded = Array{T}(undef, padszt)
-        getindices = padranges(blocksize, maxshift)
-        maxshiftv = [maxshift...]
-        region = findall(maxshiftv .> 0)
-        fixed  = NanCorrFFTs(RCpair(T, padszt, region), RCpair(T, padszt, region), RCpair(T, padszt, region))
-        moving = NanCorrFFTs(RCpair(T, padszt, region), RCpair(T, padszt, region), RCpair(T, padszt, region))
-        buf1 = RCpair(T, padszt, region)
-        buf2 = RCpair(T, padszt, region)
-        tcalib = 0
-        if display && flags != FFTW.ESTIMATE
-            print("Planning FFTs (maximum $timelimit seconds)...")
-            flush(stdout)
-            tcalib = time()
-        end
-        fftfunc = plan_rfft!(fixed.I0, flags=flags, timelimit=timelimit/2)
-        ifftfunc = plan_irfft!(fixed.I0, flags=flags, timelimit=timelimit/2)
-        if display && flags != FFTW.ESTIMATE
-            dt = time()-tcalib
-            @printf("done (%.2f seconds)\n", dt)
-        end
-        shiftindices = Vector{Int}[ [size(padded,i).+(-maxshift[i]+1:0); 1:maxshift[i]+1] for i = 1:length(maxshift) ]
-        new{T,N}(Float64[aperture_width...], maxshiftv, getindices, padded, fixed, moving, buf1, buf2, fftfunc, ifftfunc, shiftindices)
-    end
 end
-CMStorage(::Type{T}, aperture_width, maxshift; kwargs...) where {T<:Real} = CMStorage{T,length(aperture_width)}(T, aperture_width, maxshift; kwargs...)
+
+function CMStorage{T,N}(::UndefInitializer, aperture_width::NTuple{N,<:Real}, maxshift::Dims{N}; flags=FFTW.ESTIMATE, timelimit=Inf, display=true) where {T,N}
+    blocksize = map(x->ceil(Int,x), aperture_width)
+    padsz = padsize(blocksize, maxshift)
+    padded = Array{T}(undef, padsz)
+    getindices = padranges(blocksize, maxshift)
+    maxshiftv = [maxshift...]
+    region = findall(maxshiftv .> 0)
+    fixed  = NanCorrFFTs(RCpair{T}(undef, padsz, region), RCpair{T}(undef, padsz, region), RCpair{T}(undef, padsz, region))
+    moving = NanCorrFFTs(RCpair{T}(undef, padsz, region), RCpair{T}(undef, padsz, region), RCpair{T}(undef, padsz, region))
+    buf1 = RCpair{T}(undef, padsz, region)
+    buf2 = RCpair{T}(undef, padsz, region)
+    tcalib = 0
+    if display && flags != FFTW.ESTIMATE
+        print("Planning FFTs (maximum $timelimit seconds)...")
+        flush(stdout)
+        tcalib = time()
+    end
+    fftfunc = plan_rfft!(fixed.I0, flags=flags, timelimit=timelimit/2)
+    ifftfunc = plan_irfft!(fixed.I0, flags=flags, timelimit=timelimit/2)
+    if display && flags != FFTW.ESTIMATE
+        dt = time()-tcalib
+        @printf("done (%.2f seconds)\n", dt)
+    end
+    shiftindices = Vector{Int}[ [size(padded,i).+(-maxshift[i]+1:0); 1:maxshift[i]+1] for i = 1:length(maxshift) ]
+    CMStorage{T,N,typeof(real(buf1))}(Float64[aperture_width...], maxshiftv, getindices, padded, fixed, moving, buf1, buf2, fftfunc, ifftfunc, shiftindices)
+end
+
+CMStorage{T}(::UndefInitializer, aperture_width::NTuple{N,<:Real}, maxshift::Dims{N}; kwargs...) where {T<:Real,N} =
+    CMStorage{T,N}(undef, aperture_width, maxshift; kwargs...)
 
 eltype(cms::CMStorage{T,N}) where {T,N} = T
  ndims(cms::CMStorage{T,N}) where {T,N} = N
 
 """
-`mm = mismatch([T], fixed, moving, maxshift;
-[normalization=:intensity])` computes the mismatch between `fixed` and
+    mm = mismatch([T], fixed, moving, maxshift; normalization=:intensity)
+
+Compute the mismatch between `fixed` and
 `moving` as a function of translations (shifts) up to size `maxshift`.
 Optionally specify the element-type of the mismatch arrays (default
 `Float32` for Integer- or FixedPoint-valued images) and the
@@ -113,10 +114,9 @@ normalization scheme (`:intensity` or `:pixels`).
 """
 function mismatch(::Type{T}, fixed::AbstractArray, moving::AbstractArray, maxshift::DimsLike; normalization = :intensity) where T<:Real
     assertsamesize(fixed, moving)
-    maxshiftv = tovec(maxshift)
-    msz = 2maxshiftv.+1
+    msz = 2 .* maxshift .+ 1
     mm = MismatchArray(T, msz...)
-    cms = CMStorage(T, size(fixed), maxshiftv)
+    cms = CMStorage{T}(undef, size(fixed), maxshift)
     fillfixed!(cms, fixed)
     mismatch!(mm, cms, moving, normalization=normalization)
     return mm
@@ -203,7 +203,7 @@ function mismatch_apertures(::Type{T},
     assertsamesize(fixed,moving)
     (length(aperture_width) == nd && length(maxshift) == nd) || error("Dimensionality mismatch")
     mms = allocate_mmarrays(T, aperture_centers, maxshift)
-    cms = CMStorage(T, aperture_width, maxshift; flags=flags, kwargs...)
+    cms = CMStorage{T}(undef, aperture_width, maxshift; flags=flags, kwargs...)
     mismatch_apertures!(mms, fixed, moving, aperture_centers, cms, normalization=normalization)
 end
 
@@ -285,5 +285,15 @@ function sumsq_finite(A)
     end
     s
 end
+
+### Deprecations
+
+function CMStorage{T}(::UndefInitializer, aperture_width::WidthLike, maxshift::WidthLike; kwargs...) where {T<:Real}
+    Base.depwarn("CMStorage with aperture_width::$(typeof(aperture_width)) and maxshift::$(typeof(maxshift)) is deprecated, use tuples instead", :CMStorage)
+    (N = length(aperture_width)) == length(maxshift) || error("Dimensionality mismatch")
+    return CMStorage{T,N}(undef, (aperture_width...,), (maxshift...,); kwargs...)
+end
+
+@deprecate CMStorage(::Type{T}, aperture_width, maxshift; kwargs...) where T   CMStorage{T}(undef, aperture_width, maxshift; kwargs...)
 
 end
