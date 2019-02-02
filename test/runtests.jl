@@ -6,12 +6,10 @@ using Test, Libdl
 havecuda = isdefined(Main, :use_cuda) ? Main.use_cuda : !isempty(find_library(["libcudart", "cudart"], ["/usr/local/cuda"]))
 if havecuda
     println("Running both CPU and CUDA versions")
-    using CUDArt
+    using CUDAdrv
     import RegisterMismatchCuda
     RMlist = (RegisterMismatch, RegisterMismatchCuda)
-    devlist = devices(dev->capability(dev)[1] >= 2, nmax=1)
-    CUDArt.init(devlist)
-    RegisterMismatchCuda.init(devlist)
+    devlist = devices() # dev->capability(dev)[1] >= 2, nmax=1)
 else
     RMlist = (RegisterMismatch,)
 end
@@ -71,14 +69,14 @@ end
     devlist = nothing
 
     for imsz in ((7,10), (6,5))
-        for maxshift in ([4,3],[3,2])
+        for maxshift in ((4,3), (3,2))
             Apad = parent(Images.padarray(reshape(1:prod(imsz), imsz[1], imsz[2]), Fill(0, maxshift, maxshift)))
             Bpad = parent(Images.padarray(rand(1:20, imsz[1], imsz[2]), Fill(0, maxshift, maxshift)))
             for RM in RMlist
                 # intensity normalization
                 mm = RM.mismatch(Apad, Bpad, maxshift, normalization=:intensity)
                 num, denom = RegisterCore.separate(mm)
-                mmref = CenterIndexedArray(Float64, 2maxshift.+1...)
+                mmref = CenterIndexedArray(Float64, (2 .* maxshift .+ 1)...)
                 for j = -maxshift[2]:maxshift[2], i = -maxshift[1]:maxshift[1]
                     Bshift = circshift(Bpad,-[i,j])
                     df = Apad-Bshift
@@ -134,8 +132,8 @@ end
 # where num is equivalent to what would be computed globally (using mismatch)
 @testset "Block mismatch" begin
     for imsz in ((15,16), (14,17))
-        for maxshift in ([4,3],[3,2])
-            for gridsize in ([2,1], [2,3],[2,2],[1,3])
+        for maxshift in ((4,3), (3,2))
+            for gridsize in ((2,1), (2,3), (2,2), (1,3))
                 Apad = parent(Images.padarray(reshape(1:prod(imsz), imsz[1], imsz[2]), Fill(0, maxshift, maxshift)))
                 Bpad = parent(Images.padarray(rand(1:20, imsz[1], imsz[2]), Fill(0, maxshift, maxshift)))
                 for RM in RMlist
@@ -144,7 +142,7 @@ end
                     nums, denoms = RegisterCore.separate(mms)
                     num = sum(nums)
                     denom = sum(denoms)
-                    mm = CenterIndexedArray(Float64, 2maxshift.+1...)
+                    mm = CenterIndexedArray(Float64, (2 .* maxshift .+ 1)...)
                     for j = -maxshift[2]:maxshift[2], i = -maxshift[1]:maxshift[1]
                         Bshift = circshift(Bpad,-[i,j])
                         df = Apad-Bshift
@@ -168,7 +166,7 @@ end
         # Test 3d similarly
         Apad = parent(Images.padarray(reshape(1:80*6, 10, 8, 6), Fill(0, (4,3,2))))
         Bpad = parent(Images.padarray(rand(1:80*6, 10, 8, 6), Fill(0, (4,3,2))))
-        mm = RM.mismatch(Apad, Bpad, [4,3,2])
+        mm = RM.mismatch(Apad, Bpad, (4,3,2))
         num, denom = RegisterCore.separate(mm)
         mmref = CenterIndexedArray(Float64, 9, 7, 5)
         for k=-2:2, j = -3:3, i = -4:4
@@ -180,7 +178,7 @@ end
         @test ≈(mmref.data, num.data, atol=accuracy*nrm)
         @test ≈(fill(nrm,size(denom)), denom.data, atol=accuracy*nrm)
 
-        mms = RM.mismatch_apertures(Apad, Bpad, (2,3,2),[4,3,2], normalization=:intensity, display=false)
+        mms = RM.mismatch_apertures(Apad, Bpad, (2,3,2), (4,3,2), normalization=:intensity, display=false)
         nums, denoms = RegisterCore.separate(mms)
         num = sum(nums)
         denom = sum(denoms)
@@ -231,9 +229,4 @@ end
     B = rand(5, 5)
     mm = RegisterMismatch.mismatch0(A, B)
     @test eltype(mm) == Float64
-end
-
-if havecuda
-    RegisterMismatchCuda.close()
-    CUDArt.close(devlist)
 end
