@@ -4,7 +4,7 @@ import Base: copy, eltype, isnan, ndims
 
 using Images
 using RFFT, FFTW
-using RegisterCore
+using RegisterCore, PaddedViews, MappedArrays
 using Printf
 using RegisterMismatchCommon
 import RegisterMismatchCommon: mismatch0, mismatch, mismatch_apertures
@@ -118,7 +118,9 @@ function mismatch(::Type{T}, fixed::AbstractArray, moving::AbstractArray, maxshi
     mm = MismatchArray(T, msz...)
     cms = CMStorage{T}(undef, size(fixed), maxshift)
     fillfixed!(cms, fixed)
-    mismatch!(mm, cms, moving, normalization=normalization)
+    erng = shiftrange.((cms.getindices...,), first.(axes(fixed)) .- 1)  # expanded rng
+    mpad = PaddedView(convert(T, NaN), of_eltype(T, moving), erng)
+    mismatch!(mm, cms, mpad, normalization=normalization)
     return mm
 end
 
@@ -133,7 +135,7 @@ function mismatch!(mm::MismatchArray, cms::CMStorage, moving::AbstractArray; nor
     # within the boundaries of the SubArray. Use NaN only for pixels
     # truly lacking data.
     checksize_maxshift(mm, cms.maxshift)
-    safe_get!(cms.padded, moving, tuple(cms.getindices...), convert(eltype(cms), NaN))
+    copyto!(cms.padded, CartesianIndices(cms.padded), moving, CartesianIndices(moving))
     fftnan!(cms.moving, cms.padded, cms.fftfunc!)
     # Compute the mismatch
     f0 = complex(cms.fixed.I0)
@@ -216,15 +218,17 @@ in `cms`, a `CMStorage` object. The results are stored in `mms`, an
 Array-of-MismatchArrays which must have length equal to the number of
 aperture centers.
 """
-function mismatch_apertures!(mms, fixed, moving, aperture_centers, cms; normalization=:pixels)
+function mismatch_apertures!(mms, fixed, moving, aperture_centers, cms::CMStorage{T}; normalization=:pixels) where T
     assertsamesize(fixed, moving)
     N = ndims(cms)
+    fillvalue = convert(T, NaN)
+    getinds = (cms.getindices...,)::NTuple{ndims(fixed),UnitRange{Int}}
+    fixedT, movingT = of_eltype(T, fixed), of_eltype(T, moving)
     for (mm,center) in zip(mms, each_point(aperture_centers))
         rng = aperture_range(center, cms.aperture_width)
-        # sub throws an error in 0.4 when rng extends outside of
-        #    bounds, see julia #10296.
-        fsnip = Base.unsafe_view(fixed, rng...)
-        msnip = Base.unsafe_view(moving, rng...)
+        fsnip = PaddedView(fillvalue, fixedT, rng)
+        erng = shiftrange.(getinds, first.(rng) .- 1)  # expanded rng
+        msnip = PaddedView(fillvalue, movingT, erng)
         # Perform the calculation
         fillfixed!(cms, fsnip)
         mismatch!(mm, cms, msnip; normalization=normalization)
@@ -258,15 +262,8 @@ end
 
 function fillfixed!(cms::CMStorage{T}, fixed::AbstractArray) where T
     fill!(cms.padded, NaN)
-    X = view(cms.padded, ntuple(d->(1:size(fixed,d)).+cms.maxshift[d], ndims(fixed))...)
-    copyto!(X, fixed)
-    fftnan!(cms.fixed, cms.padded, cms.fftfunc!)
-end
-
-function fillfixed!(cms::CMStorage{T}, fixed::SubArray) where T
-    fill!(cms.padded, NaN)
-    X = view(cms.padded, ntuple(d->(1:size(fixed,d)).+cms.maxshift[d], ndims(fixed))...)
-    get!(X, parent(fixed), parentindices(fixed), convert(T, NaN))
+    pinds = CartesianIndices(ntuple(d->(1:size(fixed,d)).+cms.maxshift[d], ndims(fixed)))
+    copyto!(cms.padded, pinds, fixed, CartesianIndices(fixed))
     fftnan!(cms.fixed, cms.padded, cms.fftfunc!)
 end
 
