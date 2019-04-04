@@ -1,6 +1,6 @@
 #import BlockRegistration
 import RegisterMismatch
-using CenterIndexedArrays, RegisterCore, Images, RegisterMismatchCommon
+using CenterIndexedArrays, RegisterCore, Images, OffsetArrays, RegisterMismatchCommon
 using Test, Libdl
 
 havecuda = isdefined(Main, :use_cuda) ? Main.use_cuda : !isempty(find_library(["libcudart", "cudart"], ["/usr/local/cuda"]))
@@ -216,10 +216,8 @@ end
 
     outer = reshape(1:120, 12, 10)
     A = outer[1:10,2:9]
-    B = outer[2:12,1:8]
-    maxshift = (3,11)
-    @test_throws ErrorException register_translate(A, B, maxshift)
     B = outer[3:12,1:8]
+    maxshift = (3,11)
     @test register_translate(A, B, maxshift) == CartesianIndex((-2,1))
 end
 
@@ -230,3 +228,18 @@ end
     mm = RegisterMismatch.mismatch0(A, B)
     @test eltype(mm) == Float64
 end
+
+# Mismatched axes in the inputs (issue #7)
+fullimg = collect(reshape(1:20, 4, 5))
+fixed = fullimg[1:4, 2:5]
+mxshift = (2, 2)
+mm = RegisterMismatch.mismatch(fixed, fullimg, mxshift)
+num, denom = RegisterCore.separate(mm)
+mm = CenterIndexedArray(Float64, (2 .* mxshift .+ 1)...)
+for j = -mxshift[2]:mxshift[2], i = -mxshift[1]:mxshift[1]
+    mshift = OffsetArray(fullimg, (-i, -j))
+    idx = intersect.(axes(fixed), axes(mshift))
+    fsnip, msnip = fixed[idx...], mshift[idx...]
+    mm[i,j] = sum((fsnip .- msnip).^2) / (sum(fsnip.^2) + sum(msnip.^2))
+end
+@test num ./ denom ≈ mm
