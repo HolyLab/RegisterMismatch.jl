@@ -7,16 +7,19 @@ version = "0.2.0"
 CenterIndexedArrays = "46a7138f-0d70-54e1-8ada-fb8296f91f24"
 FFTW = "7a1cc6ca-52ef-59f5-83cd-3a7055c09341"
 Images = "916415d5-f1e6-5110-898d-aaa5f9f070e0"
+MappedArrays = "dbb5928d-eab1-5f90-85c2-b9b0edb7c900"
+PaddedViews = "5432bcbf-9aad-5242-b902-cca2824c8663"
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 RFFT = "3bd9afcd-55df-531a-9b34-dc642dce7b95"
 RegisterCore = "67712758-55e7-5c3c-8e85-dda1d7758434"
 RegisterMismatchCommon = "abb2e897-52bf-5d28-a379-6ca321e3b878"
 
-[extras]
-Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
-
 [compat]
 RegisterMismatchCommon = "0.2"
 
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
+
 [targets]
-test = ["Test"]
+test = ["Test", "Libdl"]
