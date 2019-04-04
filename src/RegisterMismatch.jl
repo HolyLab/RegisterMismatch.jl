@@ -113,7 +113,6 @@ normalization scheme (`:intensity` or `:pixels`).
 `NaN`s as needed. See `nanpad`.
 """
 function mismatch(::Type{T}, fixed::AbstractArray, moving::AbstractArray, maxshift::DimsLike; normalization = :intensity) where T<:Real
-    assertsamesize(fixed, moving)
     msz = 2 .* maxshift .+ 1
     mm = MismatchArray(T, msz...)
     cms = CMStorage{T}(undef, size(fixed), maxshift)
@@ -202,7 +201,6 @@ function mismatch_apertures(::Type{T},
                             flags = FFTW.MEASURE,
                             kwargs...) where T
     nd = sdims(fixed)
-    assertsamesize(fixed,moving)
     (length(aperture_width) == nd && length(maxshift) == nd) || error("Dimensionality mismatch")
     mms = allocate_mmarrays(T, aperture_centers, maxshift)
     cms = CMStorage{T}(undef, aperture_width, maxshift; flags=flags, kwargs...)
@@ -219,7 +217,6 @@ Array-of-MismatchArrays which must have length equal to the number of
 aperture centers.
 """
 function mismatch_apertures!(mms, fixed, moving, aperture_centers, cms::CMStorage{T}; normalization=:pixels) where T
-    assertsamesize(fixed, moving)
     N = ndims(cms)
     fillvalue = convert(T, NaN)
     getinds = (cms.getindices...,)::NTuple{ndims(fixed),UnitRange{Int}}
@@ -241,7 +238,6 @@ function fftnan!(out::NanCorrFFTs{T}, A::AbstractArray{T}, fftfunc!::Function) w
     I0 = real(out.I0)
     I1 = real(out.I1)
     I2 = real(out.I2)
-    assertsamesize(A, I0)
     _fftnan!(parent(I0), parent(I1), parent(I2), A)
     fftfunc!(out.I0)
     fftfunc!(out.I1)
