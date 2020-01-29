@@ -6,7 +6,8 @@ using Images
 using RFFT, FFTW
 using RegisterCore, PaddedViews, MappedArrays
 using Printf
-using RegisterMismatchCommon
+using Reexport
+@reexport using RegisterMismatchCommon
 import RegisterMismatchCommon: mismatch0, mismatch, mismatch_apertures
 
 export
