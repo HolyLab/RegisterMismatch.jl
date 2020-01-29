@@ -1,26 +1,36 @@
 name = "RegisterMismatch"
 uuid = "3c0dd727-6833-5f5d-a1e8-c0d421935c74"
 authors = ["Tim Holy <tim.holy@gmail.com>"]
-version = "0.2.0"
+version = "0.3.0"
 
 [deps]
 FFTW = "7a1cc6ca-52ef-59f5-83cd-3a7055c09341"
-Images = "916415d5-f1e6-5110-898d-aaa5f9f070e0"
+ImageCore = "a09fc81d-aa75-5fe9-8630-4744c3626534"
 MappedArrays = "dbb5928d-eab1-5f90-85c2-b9b0edb7c900"
 PaddedViews = "5432bcbf-9aad-5242-b902-cca2824c8663"
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 RFFT = "3bd9afcd-55df-531a-9b34-dc642dce7b95"
+Reexport = "189a3867-3050-52da-a836-e630ba90ab69"
 RegisterCore = "67712758-55e7-5c3c-8e85-dda1d7758434"
 RegisterMismatchCommon = "abb2e897-52bf-5d28-a379-6ca321e3b878"
 
 [compat]
-RegisterMismatchCommon = "0.2"
+FFTW = "0.3, 1"
+ImageCore = "0.8.1"
+MappedArrays = "0.2"
+PaddedViews = "0.5"
+RFFT = "0.1"
+Reexport = "0.2"
+RegisterCore = "0.2.1"
+RegisterMismatchCommon = "0.2.1"
+julia = "1.1"
 
 [extras]
 CenterIndexedArrays = "46a7138f-0d70-54e1-8ada-fb8296f91f24"
+Images = "916415d5-f1e6-5110-898d-aaa5f9f070e0"
 Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
 OffsetArrays = "6fe1bfb0-de20-5000-8ca7-80f57d26f881"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Test", "CenterIndexedArrays", "Libdl", "OffsetArrays"]
+test = ["Test", "CenterIndexedArrays", "Images", "Libdl", "OffsetArrays"]

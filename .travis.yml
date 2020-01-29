@@ -3,25 +3,17 @@ language: julia
 os:
   - linux
 julia:
-  - 0.7
-  - 1.0
   - 1.1
+  - 1
+  - nightly
 notifications:
   email: false
+
 script:
   - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
-  - julia -e 'using Pkg, LibGit2;
-              user_regs = joinpath(DEPOT_PATH[1],"registries");
-              mkpath(user_regs);
-              all_registries = Dict("General" => "https://github.com/JuliaRegistries/General.git",
-                            "HolyLabRegistry" => "https://github.com/HolyLab/HolyLabRegistry.git");
-              Base.shred!(LibGit2.CachedCredentials()) do creds
-                for (reg, url) in all_registries
-                  path = joinpath(user_regs, reg);
-                  LibGit2.with(Pkg.GitTools.clone(url, path; header = "registry $reg from $(repr(url))", credentials = creds)) do repo end
-                end
-              end'
-  - julia -e 'using Pkg; Pkg.build(); Pkg.test("RegisterMismatch"; coverage=false)'
+  - julia -e 'using Pkg; pkg"registry add General https://github.com/HolyLab/HolyLabRegistry.git"'
+  - julia -e 'using Pkg; Pkg.build(); Pkg.test(;coverage=true)'
+
 after_success:
 # update the documentation
   - julia -e 'using Pkg; Pkg.add("Documenter")'
