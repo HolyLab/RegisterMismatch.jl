@@ -2,7 +2,7 @@ module RegisterMismatch
 
 import Base: copy, eltype, isnan, ndims
 
-using Images
+using ImageCore
 using RFFT, FFTW
 using RegisterCore, PaddedViews, MappedArrays
 using Printf
