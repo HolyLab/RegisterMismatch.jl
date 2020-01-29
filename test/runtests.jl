@@ -76,7 +76,7 @@ end
                 # intensity normalization
                 mm = RM.mismatch(Apad, Bpad, maxshift, normalization=:intensity)
                 num, denom = RegisterCore.separate(mm)
-                mmref = CenterIndexedArray(Float64, (2 .* maxshift .+ 1)...)
+                mmref = CenterIndexedArray{Float64}(undef, (2 .* maxshift .+ 1)...)
                 for j = -maxshift[2]:maxshift[2], i = -maxshift[1]:maxshift[1]
                     Bshift = circshift(Bpad,-[i,j])
                     df = Apad-Bshift
@@ -142,7 +142,7 @@ end
                     nums, denoms = RegisterCore.separate(mms)
                     num = sum(nums)
                     denom = sum(denoms)
-                    mm = CenterIndexedArray(Float64, (2 .* maxshift .+ 1)...)
+                    mm = CenterIndexedArray{Float64}(undef, (2 .* maxshift .+ 1)...)
                     for j = -maxshift[2]:maxshift[2], i = -maxshift[1]:maxshift[1]
                         Bshift = circshift(Bpad,-[i,j])
                         df = Apad-Bshift
@@ -168,7 +168,7 @@ end
         Bpad = parent(Images.padarray(rand(1:80*6, 10, 8, 6), Fill(0, (4,3,2))))
         mm = RM.mismatch(Apad, Bpad, (4,3,2))
         num, denom = RegisterCore.separate(mm)
-        mmref = CenterIndexedArray(Float64, 9, 7, 5)
+        mmref = CenterIndexedArray{Float64}(undef, 9, 7, 5)
         for k=-2:2, j = -3:3, i = -4:4
             Bshift = circshift(Bpad,-[i,j,k])
             df = Apad-Bshift
@@ -235,7 +235,7 @@ fixed = fullimg[1:4, 2:5]
 mxshift = (2, 2)
 mm = RegisterMismatch.mismatch(fixed, fullimg, mxshift)
 num, denom = RegisterCore.separate(mm)
-mm = CenterIndexedArray(Float64, (2 .* mxshift .+ 1)...)
+mm = CenterIndexedArray{Float64}(undef, (2 .* mxshift .+ 1)...)
 for j = -mxshift[2]:mxshift[2], i = -mxshift[1]:mxshift[1]
     mshift = OffsetArray(fullimg, (-i, -j))
     idx = intersect.(axes(fixed), axes(mshift))
