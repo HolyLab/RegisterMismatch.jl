@@ -17,7 +17,7 @@ RegisterMismatchCommon = "abb2e897-52bf-5d28-a379-6ca321e3b878"
 [compat]
 FFTW = "0.3, 1"
 ImageCore = "0.8.1"
-MappedArrays = "0.2"
+MappedArrays = "0.2, 0.3"
 PaddedViews = "0.5"
 RFFT = "0.1"
 Reexport = "0.2"
@@ -27,10 +27,9 @@ julia = "1.1"
 
 [extras]
 CenterIndexedArrays = "46a7138f-0d70-54e1-8ada-fb8296f91f24"
-Images = "916415d5-f1e6-5110-898d-aaa5f9f070e0"
+ImageFiltering = "6a3955dd-da59-5b1f-98d4-e7296123deb5"
 Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
-OffsetArrays = "6fe1bfb0-de20-5000-8ca7-80f57d26f881"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Test", "CenterIndexedArrays", "Images", "Libdl", "OffsetArrays"]
+test = ["Test", "CenterIndexedArrays", "ImageFiltering", "Libdl"]

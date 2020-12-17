@@ -1,6 +1,7 @@
-#import BlockRegistration
-import RegisterMismatch
-using CenterIndexedArrays, RegisterCore, Images, OffsetArrays, RegisterMismatchCommon
+import RegisterMismatch  # we use qualified names to support simultaneous testing with RegisterMismatchCuda, which exports the same API
+using ImageCore, ImageFiltering
+using ImageCore.OffsetArrays
+using CenterIndexedArrays, RegisterCore, RegisterMismatchCommon
 using Test, Libdl
 
 havecuda = isdefined(Main, :use_cuda) ? Main.use_cuda : !isempty(find_library(["libcudart", "cudart"], ["/usr/local/cuda"]))
@@ -70,8 +71,8 @@ end
 
     for imsz in ((7,10), (6,5))
         for maxshift in ((4,3), (3,2))
-            Apad = parent(Images.padarray(reshape(1:prod(imsz), imsz[1], imsz[2]), Fill(0, maxshift, maxshift)))
-            Bpad = parent(Images.padarray(rand(1:20, imsz[1], imsz[2]), Fill(0, maxshift, maxshift)))
+            Apad = parent(ImageFiltering.padarray(reshape(1:prod(imsz), imsz[1], imsz[2]), Fill(0, maxshift, maxshift)))
+            Bpad = parent(ImageFiltering.padarray(rand(1:20, imsz[1], imsz[2]), Fill(0, maxshift, maxshift)))
             for RM in RMlist
                 # intensity normalization
                 mm = RM.mismatch(Apad, Bpad, maxshift, normalization=:intensity)
@@ -134,8 +135,8 @@ end
     for imsz in ((15,16), (14,17))
         for maxshift in ((4,3), (3,2))
             for gridsize in ((2,1), (2,3), (2,2), (1,3))
-                Apad = parent(Images.padarray(reshape(1:prod(imsz), imsz[1], imsz[2]), Fill(0, maxshift, maxshift)))
-                Bpad = parent(Images.padarray(rand(1:20, imsz[1], imsz[2]), Fill(0, maxshift, maxshift)))
+                Apad = parent(ImageFiltering.padarray(reshape(1:prod(imsz), imsz[1], imsz[2]), Fill(0, maxshift, maxshift)))
+                Bpad = parent(ImageFiltering.padarray(rand(1:20, imsz[1], imsz[2]), Fill(0, maxshift, maxshift)))
                 for RM in RMlist
                     # intensity normalization
                     mms = RM.mismatch_apertures(Float64, Apad, Bpad, gridsize, maxshift, normalization=:intensity, display=false)
@@ -164,8 +165,8 @@ end
 
     for RM in RMlist
         # Test 3d similarly
-        Apad = parent(Images.padarray(reshape(1:80*6, 10, 8, 6), Fill(0, (4,3,2))))
-        Bpad = parent(Images.padarray(rand(1:80*6, 10, 8, 6), Fill(0, (4,3,2))))
+        Apad = parent(ImageFiltering.padarray(reshape(1:80*6, 10, 8, 6), Fill(0, (4,3,2))))
+        Bpad = parent(ImageFiltering.padarray(rand(1:80*6, 10, 8, 6), Fill(0, (4,3,2))))
         mm = RM.mismatch(Apad, Bpad, (4,3,2))
         num, denom = RegisterCore.separate(mm)
         mmref = CenterIndexedArray{Float64}(undef, 9, 7, 5)
