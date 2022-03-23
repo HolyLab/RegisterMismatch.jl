@@ -147,16 +147,17 @@ function mismatch!(mm::MismatchArray, cms::CMStorage, moving::AbstractArray; nor
     tnum   = complex(cms.buf1)
     tdenom = complex(cms.buf2)
     if normalization == :intensity
-        for i = 1:length(tnum)
+        @inbounds Threads.@threads for i = 1:length(tnum)
             c = 2*conj(f1[i])*m1[i]
             q = conj(f2[i])*m0[i] + conj(f0[i])*m2[i]
             tdenom[i] = q
             tnum[i] = q - c
         end
     elseif normalization == :pixels
-        for i = 1:length(tnum)
-            tdenom[i] = conj(f0[i])*m0[i]
-            tnum[i] = conj(f2[i])*m0[i] - 2*conj(f1[i])*m1[i] + conj(f0[i])*m2[i]
+        @inbounds Threads.@threads for i = 1:length(tnum)
+            f0i, m0i = f0[i], m0[i]
+            tdenom[i] = conj(f0i)*m0i
+            tnum[i] = conj(f2[i])*m0i - 2*conj(f1[i])*m1[i] + conj(f0i)*m2[i]
         end
     else
         error("normalization $normalization not recognized")
@@ -247,7 +248,7 @@ function fftnan!(out::NanCorrFFTs{T}, A::AbstractArray{T}, fftfunc!::Function) w
 end
 
 function _fftnan!(I0, I1, I2, A::AbstractArray{T}) where T<:Real
-    @inbounds for i in CartesianIndices(size(A))
+    @inbounds Threads.@threads for i in CartesianIndices(size(A))
         a = A[i]
         f = !isnan(a)
         I0[i] = f
