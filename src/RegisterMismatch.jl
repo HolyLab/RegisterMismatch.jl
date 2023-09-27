@@ -10,6 +10,10 @@ using Reexport
 @reexport using RegisterMismatchCommon
 import RegisterMismatchCommon: mismatch0, mismatch, mismatch_apertures
 
+const INNER_THREADING = Ref{Bool}(true)
+allow_inner_threading!(state::Bool) = (INNER_THREADING[] = state)
+inner_threading() = INNER_THREADING[]
+
 export
     CMStorage,
     fillfixed!,
@@ -147,17 +151,34 @@ function mismatch!(mm::MismatchArray, cms::CMStorage, moving::AbstractArray; nor
     tnum   = complex(cms.buf1)
     tdenom = complex(cms.buf2)
     if normalization == :intensity
-        @inbounds Threads.@threads for i = 1:length(tnum)
-            c = 2*conj(f1[i])*m1[i]
-            q = conj(f2[i])*m0[i] + conj(f0[i])*m2[i]
-            tdenom[i] = q
-            tnum[i] = q - c
+        if inner_threading()
+            @inbounds Threads.@threads for i in eachindex(tnum)
+                c = 2 * conj(f1[i]) * m1[i]
+                q = conj(f2[i]) * m0[i] + conj(f0[i]) * m2[i]
+                tdenom[i] = q
+                tnum[i] = q - c
+            end
+        else
+            @inbounds for i in eachindex(tnum)
+                c = 2 * conj(f1[i]) * m1[i]
+                q = conj(f2[i]) * m0[i] + conj(f0[i]) * m2[i]
+                tdenom[i] = q
+                tnum[i] = q - c
+            end
         end
     elseif normalization == :pixels
-        @inbounds Threads.@threads for i = 1:length(tnum)
-            f0i, m0i = f0[i], m0[i]
-            tdenom[i] = conj(f0i)*m0i
-            tnum[i] = conj(f2[i])*m0i - 2*conj(f1[i])*m1[i] + conj(f0i)*m2[i]
+        if inner_threading()
+            @inbounds Threads.@threads for i in eachindex(tnum)
+                f0i, m0i = f0[i], m0[i]
+                tdenom[i] = conj(f0i) * m0i
+                tnum[i] = conj(f2[i]) * m0i - 2 * conj(f1[i]) * m1[i] + conj(f0i) * m2[i]
+            end
+        else
+            @inbounds for i in eachindex(tnum)
+                f0i, m0i = f0[i], m0[i]
+                tdenom[i] = conj(f0i) * m0i
+                tnum[i] = conj(f2[i]) * m0i - 2 * conj(f1[i]) * m1[i] + conj(f0i) * m2[i]
+            end
         end
     else
         error("normalization $normalization not recognized")
@@ -248,13 +269,24 @@ function fftnan!(out::NanCorrFFTs{T}, A::AbstractArray{T}, fftfunc!::Function) w
 end
 
 function _fftnan!(I0, I1, I2, A::AbstractArray{T}) where T<:Real
-    @inbounds Threads.@threads for i in CartesianIndices(size(A))
-        a = A[i]
-        f = !isnan(a)
-        I0[i] = f
-        af = f ? a : zero(T)
-        I1[i] = af
-        I2[i] = af*af
+    if inner_threading()
+        @inbounds Threads.@threads for i in CartesianIndices(size(A))
+            a = A[i]
+            f = !isnan(a)
+            I0[i] = f
+            af = f ? a : zero(T)
+            I1[i] = af
+            I2[i] = af * af
+        end
+    else
+        @inbounds for i in CartesianIndices(size(A))
+            a = A[i]
+            f = !isnan(a)
+            I0[i] = f
+            af = f ? a : zero(T)
+            I1[i] = af
+            I2[i] = af * af
+        end
     end
 end
 

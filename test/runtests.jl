@@ -68,29 +68,31 @@ end
 @testset "Mismatch" begin
     mdutils = nothing
     devlist = nothing
-
-    for imsz in ((7,10), (6,5))
-        for maxshift in ((4,3), (3,2))
-            Apad = parent(ImageFiltering.padarray(reshape(1:prod(imsz), imsz[1], imsz[2]), Fill(0, maxshift, maxshift)))
-            Bpad = parent(ImageFiltering.padarray(rand(1:20, imsz[1], imsz[2]), Fill(0, maxshift, maxshift)))
-            for RM in RMlist
-                # intensity normalization
-                mm = RM.mismatch(Apad, Bpad, maxshift, normalization=:intensity)
-                num, denom = RegisterCore.separate(mm)
-                mmref = CenterIndexedArray{Float64}(undef, (2 .* maxshift .+ 1)...)
-                for j = -maxshift[2]:maxshift[2], i = -maxshift[1]:maxshift[1]
-                    Bshift = circshift(Bpad,-[i,j])
-                    df = Apad-Bshift
-                    mmref[i,j] = sum(df.^2)
+    for threading in (true, false)
+        RegisterMismatch.allow_inner_threading!(threading)
+        for imsz in ((7, 10), (6, 5))
+            for maxshift in ((4, 3), (3, 2))
+                Apad = parent(ImageFiltering.padarray(reshape(1:prod(imsz), imsz[1], imsz[2]), Fill(0, maxshift, maxshift)))
+                Bpad = parent(ImageFiltering.padarray(rand(1:20, imsz[1], imsz[2]), Fill(0, maxshift, maxshift)))
+                for RM in RMlist
+                    # intensity normalization
+                    mm = RM.mismatch(Apad, Bpad, maxshift, normalization=:intensity)
+                    num, denom = RegisterCore.separate(mm)
+                    mmref = CenterIndexedArray{Float64}(undef, (2 .* maxshift .+ 1)...)
+                    for j = -maxshift[2]:maxshift[2], i = -maxshift[1]:maxshift[1]
+                        Bshift = circshift(Bpad, -[i, j])
+                        df = Apad - Bshift
+                        mmref[i, j] = sum(df .^ 2)
+                    end
+                    nrm = sum(Apad .^ 2) + sum(Bpad .^ 2)
+                    @test ≈(mmref.data, num.data, atol=accuracy * nrm)
+                    @test ≈(fill(nrm, size(denom)), denom.data, atol=accuracy * nrm)
+                    # pixel normalization
+                    mm = RM.mismatch(Apad, Bpad, maxshift, normalization=:pixels)
+                    _, denom = RegisterCore.separate(mm)
+                    n = Vector{Int}[size(Apad, i) .- abs.(-maxshift[i]:maxshift[i]) for i = 1:2]
+                    @test ≈(denom.data, n[1] .* n[2]', atol=accuracy * maximum(denom))
                 end
-                nrm = sum(Apad.^2)+sum(Bpad.^2)
-                @test ≈(mmref.data, num.data, atol=accuracy*nrm)
-                @test ≈(fill(nrm,size(denom)), denom.data, atol=accuracy*nrm)
-                # pixel normalization
-                mm = RM.mismatch(Apad, Bpad, maxshift, normalization=:pixels)
-                _, denom = RegisterCore.separate(mm)
-                n = Vector{Int}[size(Apad,i).-abs.(-maxshift[i]:maxshift[i]) for i = 1:2]
-                @test ≈(denom.data, n[1].*n[2]', atol=accuracy*maximum(denom))
             end
         end
     end
