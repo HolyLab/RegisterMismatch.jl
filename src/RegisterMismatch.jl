@@ -162,16 +162,16 @@ function mismatch!(mm::MismatchArray, cms::CMStorage, moving::AbstractArray; nor
     tdenom = complex(cms.buf2)
     if normalization == :intensity
         @inbounds @maybe_threads for i in eachindex(tnum)
-            c = 2 * conj(f1[i]) * m1[i]
-            q = conj(f2[i]) * m0[i] + conj(f0[i]) * m2[i]
+            c = 2*conj(f1[i])*m1[i]
+            q = conj(f2[i])*m0[i] + conj(f0[i])*m2[i]
             tdenom[i] = q
             tnum[i] = q - c
         end
     elseif normalization == :pixels
         @inbounds @maybe_threads for i in eachindex(tnum)
             f0i, m0i = f0[i], m0[i]
-            tdenom[i] = conj(f0i) * m0i
-            tnum[i] = conj(f2[i]) * m0i - 2 * conj(f1[i]) * m1[i] + conj(f0i) * m2[i]
+            tdenom[i] = conj(f0i)*m0i
+            tnum[i] = conj(f2[i])*m0i - 2*conj(f1[i])*m1[i] + conj(f0i)*m2[i]
         end
     else
         error("normalization $normalization not recognized")
@@ -268,7 +268,7 @@ function _fftnan!(I0, I1, I2, A::AbstractArray{T}) where T<:Real
         I0[i] = f
         af = f ? a : zero(T)
         I1[i] = af
-        I2[i] = af * af
+        I2[i] = af*af
     end
 end
 
