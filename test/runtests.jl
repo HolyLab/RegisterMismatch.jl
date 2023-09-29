@@ -68,10 +68,10 @@ end
 @testset "Mismatch" begin
     mdutils = nothing
     devlist = nothing
-    for threading in (true, false)
+    @testset for threading in (true, false)
         RegisterMismatch.allow_inner_threading!(threading)
-        for imsz in ((7, 10), (6, 5))
-            for maxshift in ((4, 3), (3, 2))
+        @testset for imsz in ((7, 10), (6, 5))
+            @testset for maxshift in ((4, 3), (3, 2))
                 Apad = parent(ImageFiltering.padarray(reshape(1:prod(imsz), imsz[1], imsz[2]), Fill(0, maxshift, maxshift)))
                 Bpad = parent(ImageFiltering.padarray(rand(1:20, imsz[1], imsz[2]), Fill(0, maxshift, maxshift)))
                 for RM in RMlist
