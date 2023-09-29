@@ -19,6 +19,32 @@ export
     mismatch_apertures,
     mismatch_apertures!
 
+const INNER_THREADING = Ref{Bool}(true)
+
+"""
+    allow_inner_threading!(state::Bool)
+
+Control whether threading is enabled in inner functions here. Enabled by default.
+"""
+allow_inner_threading!(state::Bool) = (INNER_THREADING[] = state)
+
+"""
+    inner_threading()::Bool
+
+Return whether threading is enabled in inner functions here. Enabled by default.
+"""
+inner_threading() = INNER_THREADING[]
+
+macro maybe_threads(ex)
+    return :(
+        if inner_threading()
+            $(esc(:($Threads.@threads $ex)))
+        else
+            $(esc(ex))
+        end
+    )
+end
+
 """
 The major types and functions exported are:
 
@@ -147,14 +173,14 @@ function mismatch!(mm::MismatchArray, cms::CMStorage, moving::AbstractArray; nor
     tnum   = complex(cms.buf1)
     tdenom = complex(cms.buf2)
     if normalization == :intensity
-        @inbounds Threads.@threads for i = 1:length(tnum)
+        @inbounds @maybe_threads for i in eachindex(tnum)
             c = 2*conj(f1[i])*m1[i]
             q = conj(f2[i])*m0[i] + conj(f0[i])*m2[i]
             tdenom[i] = q
             tnum[i] = q - c
         end
     elseif normalization == :pixels
-        @inbounds Threads.@threads for i = 1:length(tnum)
+        @inbounds @maybe_threads for i in eachindex(tnum)
             f0i, m0i = f0[i], m0[i]
             tdenom[i] = conj(f0i)*m0i
             tnum[i] = conj(f2[i])*m0i - 2*conj(f1[i])*m1[i] + conj(f0i)*m2[i]
@@ -248,7 +274,7 @@ function fftnan!(out::NanCorrFFTs{T}, A::AbstractArray{T}, fftfunc!::Function) w
 end
 
 function _fftnan!(I0, I1, I2, A::AbstractArray{T}) where T<:Real
-    @inbounds Threads.@threads for i in CartesianIndices(size(A))
+    @inbounds @maybe_threads for i in CartesianIndices(size(A))
         a = A[i]
         f = !isnan(a)
         I0[i] = f
