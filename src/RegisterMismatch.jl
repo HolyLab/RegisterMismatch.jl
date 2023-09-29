@@ -20,7 +20,19 @@ export
     mismatch_apertures!
 
 const INNER_THREADING = Ref{Bool}(true)
+
+"""
+    allow_inner_threading!(state::Bool)
+
+Control whether threading is enabled in inner functions here. Enabled by default.
+"""
 allow_inner_threading!(state::Bool) = (INNER_THREADING[] = state)
+
+"""
+    inner_threading()::Bool
+
+Return whether threading is enabled in inner functions here. Enabled by default.
+"""
 inner_threading() = INNER_THREADING[]
 
 macro maybe_threads(ex)
