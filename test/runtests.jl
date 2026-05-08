@@ -4,15 +4,23 @@ using ImageCore.OffsetArrays
 using CenterIndexedArrays, RegisterCore, RegisterMismatchCommon
 using Test, Libdl
 
-havecuda = isdefined(Main, :use_cuda) ? Main.use_cuda : !isempty(find_library(["libcudart", "cudart"], ["/usr/local/cuda"]))
-if havecuda
-    println("Running both CPU and CUDA versions")
-    using CUDAdrv
-    import RegisterMismatchCuda
-    RMlist = (RegisterMismatch, RegisterMismatchCuda)
-    devlist = devices() # dev->capability(dev)[1] >= 2, nmax=1)
-else
-    RMlist = (RegisterMismatch,)
+let
+    _want_cuda = isdefined(Main, :use_cuda) ? Main.use_cuda : !isempty(find_library(["libcudart", "cudart"], ["/usr/local/cuda"]))
+    _loaded = false
+    if _want_cuda
+        try
+            @eval using CUDAdrv
+            @eval import RegisterMismatchCuda
+            global devlist = @eval devices()
+            global RMlist = (RegisterMismatch, @eval(RegisterMismatchCuda))
+            _loaded = true
+            println("Running both CPU and CUDA versions")
+        catch
+        end
+    end
+    if !_loaded
+        global RMlist = (RegisterMismatch,)
+    end
 end
 accuracy = 1e-5 # new isapprox accuracy = 1e-6
 
