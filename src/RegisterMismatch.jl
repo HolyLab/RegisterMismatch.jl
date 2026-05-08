@@ -1,6 +1,6 @@
 module RegisterMismatch
 
-import Base: copy, eltype, isnan, ndims
+import Base: copy, eltype, ndims
 
 using ImageCore
 using RFFT, FFTW
@@ -295,7 +295,6 @@ end
 
 #### Utilities
 
-Base.isnan(A::Array{Complex{T}}) where {T} = isnan(real(A)) | isnan(imag(A))
 function sumsq_finite(A)
     s = 0.0
     for a in A

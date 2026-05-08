@@ -1,8 +1,14 @@
 import RegisterMismatch  # we use qualified names to support simultaneous testing with RegisterMismatchCuda, which exports the same API
+using Aqua
 using ImageCore, ImageFiltering
 using ImageCore.OffsetArrays
 using CenterIndexedArrays, RegisterCore, RegisterMismatchCommon
 using Test, Libdl
+
+@testset "Aqua" begin
+    # mismatch/mismatch_apertures are intentionally extended from RegisterMismatchCommon
+    Aqua.test_all(RegisterMismatch; piracies = (broken = true,))
+end
 
 let
     _want_cuda = isdefined(Main, :use_cuda) ? Main.use_cuda : !isempty(find_library(["libcudart", "cudart"], ["/usr/local/cuda"]))
