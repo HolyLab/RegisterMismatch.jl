@@ -1,5 +1,6 @@
 import RegisterMismatch  # we use qualified names to support simultaneous testing with RegisterMismatchCuda, which exports the same API
 using Aqua
+using ExplicitImports
 using ImageCore, ImageFiltering
 using ImageCore.OffsetArrays
 using CenterIndexedArrays, RegisterCore, RegisterMismatchCommon
@@ -8,6 +9,11 @@ using Test, Libdl
 @testset "Aqua" begin
     # mismatch/mismatch_apertures are intentionally extended from RegisterMismatchCommon
     Aqua.test_all(RegisterMismatch; piracies = (broken = true,))
+end
+
+@testset "ExplicitImports" begin
+    # mismatch_apertures and FFTW non-public names are intentional cross-package accesses
+    @test check_no_implicit_imports(RegisterMismatch) === nothing
 end
 
 let

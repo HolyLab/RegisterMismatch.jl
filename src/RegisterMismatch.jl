@@ -2,13 +2,21 @@ module RegisterMismatch
 
 import Base: copy, eltype, ndims
 
-using ImageCore
-using RFFT, FFTW
-using RegisterCore, PaddedViews, MappedArrays
-using Printf
-using Reexport
-@reexport using RegisterMismatchCommon
+using FFTW: FFTW
+using ImageCore: ImageCore, sdims
+using MappedArrays: MappedArrays, of_eltype
+using PaddedViews: PaddedViews, PaddedView
+using Printf: Printf, @printf
+using RFFT: RFFT, RCpair, plan_irfft!, plan_rfft!
+using Reexport: Reexport, @reexport
+using RegisterCore: RegisterCore, MismatchArray, maxshift
 import RegisterMismatchCommon: mismatch0, mismatch, mismatch_apertures
+@reexport using RegisterMismatchCommon: DimsLike, RegisterMismatchCommon, WidthLike,
+                                        allocate_mmarrays, aperture_grid, aperture_range,
+                                        assertsamesize, checksize_maxshift, correctbias!,
+                                        default_aperture_width, each_point, nanpad,
+                                        padranges, padsize, register_translate, set_FFTPROD,
+                                        shiftrange, tovec, truncatenoise!
 
 export
     CMStorage,
