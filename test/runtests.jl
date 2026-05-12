@@ -1,5 +1,6 @@
 import RegisterMismatch  # we use qualified names to support simultaneous testing with RegisterMismatchCuda, which exports the same API
 using Aqua
+using Documenter
 using ExplicitImports
 using ImageCore, ImageFiltering
 using ImageCore.OffsetArrays
@@ -282,3 +283,8 @@ for j in -mxshift[2]:mxshift[2], i in -mxshift[1]:mxshift[1]
     mm[i, j] = sum((fsnip .- msnip) .^ 2) / (sum(fsnip .^ 2) + sum(msnip .^ 2))
 end
 @test num ./ denom ≈ mm
+
+@testset "Doctests" begin
+    DocMeta.setdocmeta!(RegisterMismatch, :DocTestSetup, :(using RegisterMismatch, FFTW); recursive=true)
+    doctest(RegisterMismatch; manual=false)
+end
