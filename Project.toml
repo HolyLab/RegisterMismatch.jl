@@ -17,6 +17,7 @@ RegisterMismatchCommon = "abb2e897-52bf-5d28-a379-6ca321e3b878"
 [compat]
 Aqua = "0.8"
 CenterIndexedArrays = "1"
+ExplicitImports = "1"
 FFTW = "0.3, 1"
 ImageCore = "0.8.1, 0.9, 0.10"
 ImageFiltering = "0.7"
@@ -34,9 +35,10 @@ julia = "1.10"
 [extras]
 Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
 CenterIndexedArrays = "46a7138f-0d70-54e1-8ada-fb8296f91f24"
+ExplicitImports = "7d51a73a-1435-4ff3-83d9-f097790105c7"
 ImageFiltering = "6a3955dd-da59-5b1f-98d4-e7296123deb5"
 Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Aqua", "Test", "CenterIndexedArrays", "ImageFiltering", "Libdl"]
+test = ["Aqua", "ExplicitImports", "Test", "CenterIndexedArrays", "ImageFiltering", "Libdl"]
