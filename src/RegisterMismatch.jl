@@ -9,7 +9,7 @@ using PaddedViews: PaddedViews, PaddedView
 using Printf: Printf, @printf
 using RFFT: RFFT, RCpair, plan_irfft!, plan_rfft!
 using Reexport: Reexport, @reexport
-using RegisterCore: RegisterCore, MismatchArray, maxshift
+using RegisterCore: RegisterCore, MismatchArray, highpass, maxshift
 import RegisterMismatchCommon: mismatch0, mismatch, mismatch_apertures
 @reexport using RegisterMismatchCommon: DimsLike, RegisterMismatchCommon, WidthLike,
                                         allocate_mmarrays, aperture_grid, aperture_range,
@@ -21,6 +21,7 @@ import RegisterMismatchCommon: mismatch0, mismatch, mismatch_apertures
 export
     CMStorage,
     fillfixed!,
+    highpass,
     mismatch0,
     mismatch,
     mismatch!,
@@ -134,6 +135,11 @@ CMStorage{T}(::UndefInitializer, aperture_width::NTuple{N, <:Real}, maxshift::Di
 
 eltype(cms::CMStorage{T, N}) where {T, N} = T
 ndims(cms::CMStorage{T, N}) where {T, N} = N
+copy(cms::CMStorage) = CMStorage(copy(cms.aperture_width), copy(cms.maxshift), copy(cms.getindices),
+                                  copy(cms.padded), copy(cms.fixed), copy(cms.moving),
+                                  copy(cms.buf1), copy(cms.buf2),
+                                  cms.fftfunc!, cms.ifftfunc!,
+                                  deepcopy(cms.shiftindices))
 
 """
     mm = mismatch([T], fixed, moving, maxshift; normalization=:intensity)
@@ -299,21 +305,6 @@ function fillfixed!(cms::CMStorage{T}, fixed::AbstractArray) where {T}
     pinds = CartesianIndices(ntuple(d -> (1:size(fixed, d)) .+ cms.maxshift[d], ndims(fixed)))
     copyto!(cms.padded, pinds, fixed, CartesianIndices(fixed))
     return fftnan!(cms.fixed, cms.padded, cms.fftfunc!)
-end
-
-#### Utilities
-
-function sumsq_finite(A)
-    s = 0.0
-    for a in A
-        if isfinite(a)
-            s += a * a
-        end
-    end
-    if s == 0
-        error("No finite values available")
-    end
-    return s
 end
 
 end
