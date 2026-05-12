@@ -5,7 +5,7 @@ DONE: format with runic
 DONE: add Aqua.jl
 DONE: remove deprecations
 DONE: add ExplicitImports.jl
-TODO: limit struct mutability
+DONE: limit struct mutability
 TODO: improve test coverage
 TODO: add and improve docstrings
 TODO: add or improve documentation
