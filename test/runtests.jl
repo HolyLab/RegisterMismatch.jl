@@ -244,6 +244,20 @@ end
     B = outer[3:12, 1:8]
     maxshift = (3, 11)
     @test register_translate(A, B, maxshift) == CartesianIndex((-2, 1))
+
+    # Invalid normalization keyword
+    fixed8 = rand(Float64, 8, 8)
+    moving8 = rand(Float64, 8, 8)
+    cms8 = RM.CMStorage{Float64}(undef, (8, 8), (2, 2))
+    RM.fillfixed!(cms8, fixed8)
+    mm8 = MismatchArray(Float64, 5, 5)
+    moving_padded = rand(Float64, size(cms8.padded))
+    @test_throws "normalization bad not recognized" RM.mismatch!(mm8, cms8, moving_padded; normalization = :bad)
+
+    # copy(CMStorage) exercises copy(NanCorrFFTs)
+    cms2 = copy(cms8)
+    @test cms2 isa RegisterMismatch.CMStorage{Float64}
+    @test cms2.fixed !== cms8.fixed
 end
 
 # Mismatched types
