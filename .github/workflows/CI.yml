@@ -45,3 +45,20 @@ jobs:
         with:
           file: lcov.info
           token: ${{ secrets.CODECOV_TOKEN }}
+  docs:
+    name: Documentation
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v2
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1'
+      - name: registry_add
+        run: julia -e 'using Pkg; pkg"registry add General https://github.com/HolyLab/HolyLabRegistry.git"'
+      - uses: julia-actions/julia-buildpkg@v1
+      - uses: julia-actions/julia-docdeploy@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }}
