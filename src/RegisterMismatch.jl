@@ -308,14 +308,4 @@ function sumsq_finite(A)
     return s
 end
 
-### Deprecations
-
-function CMStorage{T}(::UndefInitializer, aperture_width::WidthLike, maxshift::WidthLike; kwargs...) where {T <: Real}
-    Base.depwarn("CMStorage with aperture_width::$(typeof(aperture_width)) and maxshift::$(typeof(maxshift)) is deprecated, use tuples instead", :CMStorage)
-    (N = length(aperture_width)) == length(maxshift) || error("Dimensionality mismatch")
-    return CMStorage{T, N}(undef, (aperture_width...,), (maxshift...,); kwargs...)
-end
-
-@deprecate CMStorage(::Type{T}, aperture_width, maxshift; kwargs...) where {T}   CMStorage{T}(undef, aperture_width, maxshift; kwargs...)
-
 end
