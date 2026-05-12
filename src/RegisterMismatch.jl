@@ -82,11 +82,32 @@ end
 copy(x::NanCorrFFTs) = NanCorrFFTs(copy(x.I0), copy(x.I1), copy(x.I2))
 
 """
-    CMStorage{T}(undef, aperture_width, maxshift; flags=FFTW.ESTIMATE, timelimit=Inf, display=true)
+    CMStorage{T}(undef, aperture_width, maxshift; flags=FFTW.ESTIMATE, timelimit=Inf, display=true) -> CMStorage{T}
 
-Prepare for FFT-based mismatch computations over domains of size `aperture_width`, computing the
-mismatch up to shifts of size `maxshift`.  The keyword arguments allow you to control the planning
-process for the FFTs.
+Pre-allocate FFT working storage for mismatch computations over apertures of size `aperture_width`
+with translations up to `maxshift`. The element type `T` (e.g., `Float32` or `Float64`) must be
+specified explicitly.
+
+`flags` is an FFTW planning flag: `FFTW.ESTIMATE` (default, instant) or `FFTW.MEASURE` /
+`FFTW.PATIENT` (slower to plan but faster per call — worthwhile when the same aperture size is
+reused many times). `timelimit` caps planning time in seconds. Set `display=false` to suppress
+the planning progress message printed when `flags != FFTW.ESTIMATE`.
+
+The typical low-level workflow is:
+1. Construct `CMStorage` once.
+2. Call [`fillfixed!`](@ref) to load the fixed image.
+3. Call [`mismatch!`](@ref) for each moving image.
+
+# Examples
+```jldoctest
+julia> cms = CMStorage{Float32}(undef, (10, 10), (3, 3));
+
+julia> eltype(cms)
+Float32
+
+julia> ndims(cms)
+2
+```
 """
 mutable struct CMStorage{T <: AbstractFloat, N, RCType <: RCpair{T, N}, FFT <: Function, IFFT <: Function}
     const aperture_width::Vector{Float64}
@@ -142,16 +163,29 @@ copy(cms::CMStorage) = CMStorage(copy(cms.aperture_width), copy(cms.maxshift), c
                                   deepcopy(cms.shiftindices))
 
 """
-    mm = mismatch([T], fixed, moving, maxshift; normalization=:intensity)
+    mm = mismatch([T], fixed, moving, maxshift; normalization=:intensity) -> MismatchArray
 
-Compute the mismatch between `fixed` and
-`moving` as a function of translations (shifts) up to size `maxshift`.
-Optionally specify the element-type of the mismatch arrays (default
-`Float32` for Integer- or FixedPoint-valued images) and the
-normalization scheme (`:intensity` or `:pixels`).
+Compute the mismatch between `fixed` and `moving` as a function of translations up to size
+`maxshift`. Returns a `MismatchArray` indexed from `-maxshift[d]:maxshift[d]` in each dimension.
 
-`fixed` and `moving` must have the same size; you can pad with
-`NaN`s as needed. See `nanpad`.
+The optional type parameter `T` sets the element type (default: `Float32` for integer or
+fixed-point images, `eltype(fixed)` otherwise). The `normalization` keyword controls the
+denominator: `:intensity` (default) normalizes by local image intensity; `:pixels` normalizes
+by pixel count.
+
+`fixed` and `moving` must have the same size; pad with `NaN`s as needed (see [`nanpad`](@ref)).
+
+# Examples
+```jldoctest
+julia> fixed = zeros(Float32, 10, 10); fixed[3:7, 3:7] .= 1;
+
+julia> moving = circshift(fixed, (2, 1));
+
+julia> mm = mismatch(fixed, moving, (3, 3));
+
+julia> size(mm)
+(7, 7)
+```
 """
 function mismatch(::Type{T}, fixed::AbstractArray, moving::AbstractArray, maxshift::DimsLike; normalization = :intensity) where {T <: Real}
     msz = 2 .* maxshift .+ 1
@@ -165,9 +199,13 @@ function mismatch(::Type{T}, fixed::AbstractArray, moving::AbstractArray, maxshi
 end
 
 """
-`mismatch!(mm, cms, moving; [normalization=:intensity])`
-computes the mismatch as a function of shift, storing the result in
-`mm`. The `fixed` image has been prepared in `cms`, a `CMStorage` object.
+    mismatch!(mm, cms, moving; normalization=:intensity) -> mm
+
+Compute the mismatch as a function of shift, storing the result in `mm`. The `fixed` image must
+have been loaded into `cms` via [`fillfixed!`](@ref) before calling this function. `cms` is a
+[`CMStorage`](@ref) object.
+
+See also [`mismatch`](@ref) for a higher-level interface that handles setup automatically.
 """
 function mismatch!(mm::MismatchArray, cms::CMStorage, moving::AbstractArray; normalization = :intensity)
     # Pad the moving snippet using any available data, including
@@ -209,29 +247,37 @@ function mismatch!(mm::MismatchArray, cms::CMStorage, moving::AbstractArray; nor
 end
 
 """
-`mms = mismatch_apertures([T], fixed, moving, gridsize, maxshift;
-[normalization=:pixels], [flags=FFTW.MEASURE], kwargs...)` computes
-the mismatch between `fixed` and `moving` over a regularly-spaced grid
-of aperture centers, effectively breaking the images up into
-chunks. The maximum-allowed shift in any aperture is `maxshift`.
+    mms = mismatch_apertures([T], fixed, moving, gridsize, maxshift; normalization=:pixels, flags=FFTW.MEASURE, kwargs...)
+    mms = mismatch_apertures([T], fixed, moving, aperture_centers, aperture_width, maxshift; kwargs...)
 
-`mms = mismatch_apertures([T], fixed, moving, aperture_centers,
-aperture_width, maxshift; kwargs...)` computes the mismatch between
-`fixed` and `moving` over a list of apertures of size `aperture_width`
-at positions defined by `aperture_centers`.
+Compute the mismatch between `fixed` and `moving` over a grid of aperture positions. Returns an
+array of `MismatchArray`s with the same shape as `aperture_centers`.
 
-`fixed` and `moving` must have the same size; you can pad with `NaN`s
-as needed to ensure this.  You can optionally specify the real-valued
-element type mm; it defaults to the element type of `fixed` and
-`moving` or, for Integer- or FixedPoint-valued images, `Float32`.
+The first form divides the image into a `gridsize` regular grid, inferring aperture centers and
+widths automatically. The second form accepts explicit `aperture_centers` and `aperture_width`.
+In both cases, the mismatch within each aperture is computed for translations up to `maxshift`.
 
-On output, `mms` will be an Array-of-MismatchArrays, with the outer
-array having the same "grid" shape as `aperture_centers`.  The centers
-can in general be provided as an vector-of-tuples, vector-of-vectors,
-or a matrix with each point in a column.  If your centers are arranged
-in a rectangular grid, you can use an `N`-dimensional array-of-tuples
-(or array-of-vectors) or an `N+1`-dimensional array with the center
-positions specified along the first dimension. See `aperture_grid`.
+`fixed` and `moving` must have the same size; pad with `NaN`s as needed (see [`nanpad`](@ref)).
+The optional type parameter `T` sets the element type of the output (default: `Float32` for
+integer or fixed-point images, `eltype(fixed)` otherwise).
+
+The `aperture_centers` can be a vector-of-tuples, vector-of-vectors, or matrix (each point as a
+column); for rectangular grids use [`aperture_grid`](@ref).
+
+# Examples
+```jldoctest
+julia> using FFTW
+
+julia> fixed = ones(Float32, 20, 20); moving = ones(Float32, 20, 20);
+
+julia> mms = mismatch_apertures(fixed, moving, (2, 2), (3, 3); flags=FFTW.ESTIMATE);
+
+julia> size(mms)
+(2, 2)
+
+julia> size(mms[1, 1])
+(7, 7)
+```
 """
 function mismatch_apertures(
         ::Type{T},
@@ -252,13 +298,15 @@ function mismatch_apertures(
 end
 
 """
-`mismatch_apertures!(mms, fixed, moving, aperture_centers, cms;
-[normalization=:pixels])` computes the mismatch between `fixed` and
-`moving` over a list of apertures at positions defined by
-`aperture_centers`.  The parameters and working storage are contained
-in `cms`, a `CMStorage` object. The results are stored in `mms`, an
-Array-of-MismatchArrays which must have length equal to the number of
-aperture centers.
+    mms = mismatch_apertures!(mms, fixed, moving, aperture_centers, cms; normalization=:pixels) -> mms
+
+Compute the mismatch between `fixed` and `moving` over apertures at positions `aperture_centers`,
+storing results in `mms`. Working storage and parameters are provided by `cms`, a
+[`CMStorage`](@ref) object. `mms` must be an array of `MismatchArray`s with length equal to the
+number of aperture centers.
+
+See also [`mismatch_apertures`](@ref) for a higher-level interface, and
+[`allocate_mmarrays`](@ref) for allocating `mms`.
 """
 function mismatch_apertures!(mms, fixed, moving, aperture_centers, cms::CMStorage{T}; normalization = :pixels) where {T}
     N = ndims(cms)
@@ -300,6 +348,16 @@ function _fftnan!(I0, I1, I2, A::AbstractArray{T}) where {T <: Real}
     end
 end
 
+"""
+    fillfixed!(cms::CMStorage, fixed) -> cms
+
+Load the `fixed` image into `cms`, preparing it for mismatch computations. Call this once
+before calling [`mismatch!`](@ref) one or more times with different moving images.
+
+This is the setup step performed internally by [`mismatch`](@ref) and
+[`mismatch_apertures`](@ref). Use it directly when computing multiple mismatches against the
+same fixed image with different moving images.
+"""
 function fillfixed!(cms::CMStorage{T}, fixed::AbstractArray) where {T}
     fill!(cms.padded, NaN)
     pinds = CartesianIndices(ntuple(d -> (1:size(fixed, d)) .+ cms.maxshift[d], ndims(fixed)))
