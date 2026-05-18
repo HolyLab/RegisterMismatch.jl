@@ -46,11 +46,11 @@ accuracy = 1.0e-5 # new isapprox accuracy = 1e-6
         (10, 1) (10, 3) (10, 5) (10, 7)
     ]
     @test RegisterMismatch.aperture_grid((10, 7), (4, 4)) == agrid
-    for (i, pt) in enumerate(RegisterMismatch.each_point(agrid))
+    for (i, pt) in enumerate(RegisterMismatch.each_aperture_center(agrid))
         @test pt == agrid[i]
     end
     agrida = reshape(reinterpret(Int, vec(agrid)), (2, 4, 4))
-    for (i, pt) in enumerate(RegisterMismatch.each_point(agrida))
+    for (i, pt) in enumerate(RegisterMismatch.each_aperture_center(agrida))
         @test pt == [agrid[i]...]
     end
 
@@ -92,7 +92,7 @@ end
     mdutils = nothing
     devlist = nothing
     @testset for threading in (true, false)
-        RegisterMismatch.allow_inner_threading!(threading)
+        RegisterMismatch.set_inner_threading!(threading)
         @testset for imsz in ((7, 10), (6, 5))
             @testset for maxshift in ((4, 3), (3, 2))
                 Apad = parent(ImageFiltering.padarray(reshape(1:prod(imsz), imsz[1], imsz[2]), Fill(0, maxshift, maxshift)))
@@ -121,13 +121,13 @@ end
     end
 end
 
-# Test for denom overflow with mismatch0
+# Test for denom overflow with mismatch_zeroshift
 @testset "Denom overflow" begin
     C16 = N0f16[0.6 0.1; 0.7 0.1]
     D16 = N0f16[0.7 0.1; 0.6 0.1]
     C = Float64.(C16)
     D = Float64.(D16)
-    nd = RegisterMismatch.mismatch0(C16, D16; normalization = :intensity)
+    nd = RegisterMismatch.mismatch_zeroshift(C16, D16; normalization = :intensity)
     @test nd.denom ≈ sum((C .^ 2) .+ (D .^ 2))
     @test nd.num ≈ sum((C .- D) .^ 2)
 end
@@ -137,17 +137,17 @@ end
     C = rand(7, 9)
     D = rand(7, 9)
     mm = RegisterMismatch.mismatch(C, D, (3, 3))
-    nd = RegisterMismatch.mismatch0(C, D)
+    nd = RegisterMismatch.mismatch_zeroshift(C, D)
     @test mm[0, 0].num ≈ nd.num
     @test mm[0, 0].denom ≈ nd.denom
     mm = RegisterMismatch.mismatch(C, D, (3, 3), normalization = :pixels)
-    nd = RegisterMismatch.mismatch0(C, D, normalization = :pixels)
+    nd = RegisterMismatch.mismatch_zeroshift(C, D, normalization = :pixels)
     @test mm[0, 0].num ≈ nd.num
     @test mm[0, 0].denom ≈ nd.denom
 
     mms = RegisterMismatch.mismatch_apertures(C, D, (2, 2), (3, 2), normalization = :intensity)
-    nd0 = RegisterMismatch.mismatch0(C, D)
-    nd1 = RegisterMismatch.mismatch0(mms)
+    nd0 = RegisterMismatch.mismatch_zeroshift(C, D)
+    nd1 = RegisterMismatch.mismatch_zeroshift(mms)
     @test nd0.num ≈ nd1.num
     @test nd0.denom ≈ nd1.denom
 end
@@ -265,7 +265,7 @@ end
 @testset "Mismatched types" begin
     A = rand(Float32, 5, 5)
     B = rand(5, 5)
-    mm = RegisterMismatch.mismatch0(A, B)
+    mm = RegisterMismatch.mismatch_zeroshift(A, B)
     @test eltype(mm) == Float64
 end
 

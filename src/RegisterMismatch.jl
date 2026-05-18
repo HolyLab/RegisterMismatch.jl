@@ -9,38 +9,49 @@ using PaddedViews: PaddedViews, PaddedView
 using Printf: Printf, @printf
 using RFFT: RFFT, RCpair, plan_irfft!, plan_rfft!
 using Reexport: Reexport, @reexport
-using RegisterCore: RegisterCore, MismatchArray, highpass, maxshift
+using RegisterCore: RegisterCore, MismatchArray, highpass, highpass!, maxshift
 import RegisterMismatchCommon: mismatch0, mismatch, mismatch_apertures
 @reexport using RegisterMismatchCommon: DimsLike, RegisterMismatchCommon, WidthLike,
+                                        FFTPROD, set_FFTPROD,
                                         allocate_mmarrays, aperture_grid, aperture_range,
-                                        assertsamesize, checksize_maxshift, correctbias!,
-                                        default_aperture_width, each_point, nanpad,
-                                        padranges, padsize, register_translate, set_FFTPROD,
-                                        shiftrange, tovec, truncatenoise!
+                                        assertsamesize, checksamesize,
+                                        checksize_maxshift, checksizemaxshift,
+                                        correctbias!, correctbias,
+                                        default_aperture_width,
+                                        each_aperture_center, each_point,
+                                        mismatch_zeroshift,
+                                        nanpad, padranges, padsize,
+                                        register_translate, shiftrange, tovec,
+                                        truncatenoise!, truncatenoise
 
 export
     CMStorage,
     fillfixed!,
     highpass,
+    highpass!,
+    inner_threading,
     mismatch0,
     mismatch,
     mismatch!,
     mismatch_apertures,
-    mismatch_apertures!
+    mismatch_apertures!,
+    set_inner_threading!
 
 const INNER_THREADING = Ref{Bool}(true)
 
 """
-    allow_inner_threading!(state::Bool)
+    set_inner_threading!(state::Bool)
 
-Control whether threading is enabled in inner functions here. Enabled by default.
+Enable (`true`) or disable (`false`) threading in inner mismatch loops. Enabled by default.
 """
-allow_inner_threading!(state::Bool) = (INNER_THREADING[] = state)
+set_inner_threading!(state::Bool) = (INNER_THREADING[] = state)
+
+Base.@deprecate allow_inner_threading!(state) set_inner_threading!(state)
 
 """
-    inner_threading()::Bool
+    inner_threading() -> Bool
 
-Return whether threading is enabled in inner functions here. Enabled by default.
+Return whether threading is currently enabled in inner mismatch loops.
 """
 inner_threading() = INNER_THREADING[]
 
@@ -59,7 +70,7 @@ The major types and functions exported are:
 
 - `mismatch` and `mismatch!`: compute the mismatch between two images
 - `mismatch_apertures` and `mismatch_apertures!`: compute apertured mismatch between two images
-- `mismatch0`: simple direct mismatch calculation with no shift
+- `mismatch_zeroshift` (alias: `mismatch0`): simple direct mismatch calculation with no shift
 - `nanpad`: pad the smaller image with NaNs
 - `highpass`: highpass filter an image
 - `correctbias!`: replace corrupted mismatch data (due to camera bias inhomogeneity) with imputed data
@@ -71,7 +82,7 @@ The major types and functions exported are:
 RegisterMismatch
 
 FFTW.set_num_threads(min(Sys.CPU_THREADS, 8))
-set_FFTPROD([2, 3])
+set_FFTPROD([2, 3])  # default: FFT sizes are products of 2^a * 3^b
 
 mutable struct NanCorrFFTs{T <: AbstractFloat, N, RCType <: RCpair{T, N}}
     const I0::RCType
@@ -151,8 +162,14 @@ function CMStorage{T, N}(::UndefInitializer, aperture_width::NTuple{N, <:Real}, 
     return CMStorage{T, N, typeof(buf1), typeof(fftfunc), typeof(ifftfunc)}(Float64[aperture_width...], maxshiftv, getindices, padded, fixed, moving, buf1, buf2, fftfunc, ifftfunc, shiftindices)
 end
 
-CMStorage{T}(::UndefInitializer, aperture_width::NTuple{N, <:Real}, maxshift::Dims{N}; kwargs...) where {T <: Real, N} =
-    CMStorage{T, N}(undef, aperture_width, maxshift; kwargs...)
+function CMStorage{T}(::UndefInitializer, aperture_width::WidthLike, maxshift::DimsLike; kwargs...) where {T <: Real}
+    N = length(aperture_width)
+    length(maxshift) == N || error("aperture_width and maxshift must have the same length, got $N and $(length(maxshift))")
+    return CMStorage{T, N}(undef,
+                           ntuple(i -> Float64(aperture_width[i]), N),
+                           ntuple(i -> Int(maxshift[i]), N);
+                           kwargs...)
+end
 
 eltype(cms::CMStorage{T, N}) where {T, N} = T
 ndims(cms::CMStorage{T, N}) where {T, N} = N
@@ -212,7 +229,7 @@ function mismatch!(mm::MismatchArray, cms::CMStorage, moving::AbstractArray; nor
     # regions that might be in the parent Array but are not present
     # within the boundaries of the SubArray. Use NaN only for pixels
     # truly lacking data.
-    checksize_maxshift(mm, cms.maxshift)
+    checksizemaxshift(mm, cms.maxshift)
     copyto!(cms.padded, CartesianIndices(cms.padded), moving, CartesianIndices(moving))
     fftnan!(cms.moving, cms.padded, cms.fftfunc!)
     # Compute the mismatch
@@ -313,7 +330,7 @@ function mismatch_apertures!(mms, fixed, moving, aperture_centers, cms::CMStorag
     fillvalue = convert(T, NaN)
     getinds = (cms.getindices...,)::NTuple{ndims(fixed), UnitRange{Int}}
     fixedT, movingT = of_eltype(T, fixed), of_eltype(T, moving)
-    for (mm, center) in zip(mms, each_point(aperture_centers))
+    for (mm, center) in zip(mms, each_aperture_center(aperture_centers))
         rng = aperture_range(center, cms.aperture_width)
         fsnip = PaddedView(fillvalue, fixedT, rng)
         erng = shiftrange.(getinds, first.(rng) .- 1)  # expanded rng
