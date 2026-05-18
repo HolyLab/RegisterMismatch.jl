@@ -166,7 +166,7 @@ is below a noise threshold.
 ```jldoctest
 julia> mm = mismatch([1.0 2.0; 3.0 4.0], [1.0 2.0; 3.0 4.0], (1, 1));
 
-julia> nd = mismatch0([1.0 2.0; 3.0 4.0], [1.0 2.0; 3.0 4.0])
+julia> nd = mismatch_zeroshift([1.0 2.0; 3.0 4.0], [1.0 2.0; 3.0 4.0])
 NumDenom(0.0,60.0)
 ```
 
