@@ -19,7 +19,7 @@ mismatch
 mismatch!
 mismatch_apertures
 mismatch_apertures!
-mismatch0
+mismatch_zeroshift
 ```
 
 ## Low-level reusable workflow
@@ -41,7 +41,9 @@ nanpad
 
 ```@docs
 correctbias!
+correctbias
 truncatenoise!
+truncatenoise
 ```
 
 ## Utilities
@@ -51,8 +53,11 @@ register_translate
 aperture_grid
 allocate_mmarrays
 aperture_range
-each_point
+each_aperture_center
+FFTPROD
 set_FFTPROD
+inner_threading
+set_inner_threading!
 ```
 
 ## Types and helpers (RegisterCore)
@@ -91,8 +96,8 @@ WidthLike
 ## Internal helpers
 
 ```@docs
-assertsamesize
-checksize_maxshift
+checksamesize
+checksizemaxshift
 default_aperture_width
 padranges
 padsize
