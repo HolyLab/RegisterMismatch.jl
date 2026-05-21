@@ -84,10 +84,10 @@ RegisterMismatch
 FFTW.set_num_threads(min(Sys.CPU_THREADS, 8))
 set_FFTPROD([2, 3])  # default: FFT sizes are products of 2^a * 3^b
 
-mutable struct NanCorrFFTs{T <: AbstractFloat, N, RCType <: RCpair{T, N}}
-    const I0::RCType
-    const I1::RCType
-    const I2::RCType
+struct NanCorrFFTs{T <: AbstractFloat, N, RCType <: RCpair{T, N}}
+    I0::RCType
+    I1::RCType
+    I2::RCType
 end
 
 copy(x::NanCorrFFTs) = NanCorrFFTs(copy(x.I0), copy(x.I1), copy(x.I2))
@@ -120,19 +120,19 @@ julia> ndims(cms)
 2
 ```
 """
-mutable struct CMStorage{T <: AbstractFloat, N, RCType <: RCpair{T, N}, FFT <: Function, IFFT <: Function}
-    const aperture_width::Vector{Float64}
-    const maxshift::Vector{Int}
-    const getindices::Vector{UnitRange{Int}}   # indices for pulling padded data, in source-coordinates
-    const padded::Array{T, N}
-    const fixed::NanCorrFFTs{T, N, RCType}
-    const moving::NanCorrFFTs{T, N, RCType}
-    const buf1::RCType
-    const buf2::RCType
+struct CMStorage{T <: AbstractFloat, N, RCType <: RCpair{T, N}, FFT <: Function, IFFT <: Function}
+    aperture_width::Vector{Float64}
+    maxshift::Vector{Int}
+    getindices::Vector{UnitRange{Int}}   # indices for pulling padded data, in source-coordinates
+    padded::Array{T, N}
+    fixed::NanCorrFFTs{T, N, RCType}
+    moving::NanCorrFFTs{T, N, RCType}
+    buf1::RCType
+    buf2::RCType
     # the next two store the result of calling plan_fft! and plan_ifft!
-    const fftfunc!::FFT
-    const ifftfunc!::IFFT
-    const shiftindices::Vector{Vector{Int}} # indices for performing fftshift & snipping from -maxshift:maxshift
+    fftfunc!::FFT
+    ifftfunc!::IFFT
+    shiftindices::Vector{Vector{Int}} # indices for performing fftshift & snipping from -maxshift:maxshift
 end
 
 function CMStorage{T, N}(::UndefInitializer, aperture_width::NTuple{N, <:Real}, maxshift::Dims{N}; flags = FFTW.ESTIMATE, timelimit = Inf, display = true) where {T, N}
